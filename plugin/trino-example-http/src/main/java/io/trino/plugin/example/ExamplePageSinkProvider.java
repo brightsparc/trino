@@ -19,6 +19,8 @@ import io.trino.spi.connector.ConnectorPageSink;
 import io.trino.spi.connector.ConnectorPageSinkProvider;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.ConnectorTransactionHandle;
+import org.apache.pulsar.client.api.PulsarClient;
+import org.apache.pulsar.client.api.PulsarClientException;
 
 import javax.inject.Inject;
 
@@ -28,9 +30,15 @@ import static java.util.Objects.requireNonNull;
 public class ExamplePageSinkProvider
         implements ConnectorPageSinkProvider
 {
+    private final PulsarClient pulsarClient;
+
     @Inject
-    public ExamplePageSinkProvider()
+    public ExamplePageSinkProvider() throws PulsarClientException
     {
+        // TODO: Pass configuration
+        pulsarClient = PulsarClient.builder()
+                .serviceUrl("pulsar://localhost:6650")
+                .build();
     }
 
     @Override
@@ -40,11 +48,18 @@ public class ExamplePageSinkProvider
         checkArgument(tableHandle instanceof ExampleOutputTableHandle, "tableHandle is not an instance of CassandraOutputTableHandle");
         ExampleOutputTableHandle handle = (ExampleOutputTableHandle) tableHandle;
 
-        return new ExamplePageSink(
-                handle.getSchemaName(),
-                handle.getTableName(),
-                handle.getColumnNames(),
-                handle.getColumnTypes());
+        try {
+            return new ExamplePageSink(
+                    handle.getSchemaName(),
+                    handle.getTableName(),
+                    handle.getColumnNames(),
+                    handle.getColumnTypes(),
+                    pulsarClient);
+        }
+        catch (Exception ex) {
+            ex.printStackTrace();
+            return null;
+        }
     }
 
     @Override
@@ -54,10 +69,17 @@ public class ExamplePageSinkProvider
         checkArgument(tableHandle instanceof ExampleInsertTableHandle, "tableHandle is not an instance of ConnectorInsertTableHandle");
         ExampleInsertTableHandle handle = (ExampleInsertTableHandle) tableHandle;
 
-        return new ExamplePageSink(
-                handle.getSchemaName(),
-                handle.getTableName(),
-                handle.getColumnNames(),
-                handle.getColumnTypes());
+        try {
+            return new ExamplePageSink(
+                    handle.getSchemaName(),
+                    handle.getTableName(),
+                    handle.getColumnNames(),
+                    handle.getColumnTypes(),
+                    pulsarClient);
+        }
+        catch (Exception ex) {
+            ex.printStackTrace();
+            return null;
+        }
     }
 }

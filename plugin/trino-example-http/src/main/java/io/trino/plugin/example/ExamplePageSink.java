@@ -13,8 +13,8 @@
  */
 package io.trino.plugin.example;
 
-//import com.fasterxml.jackson.databind.node.ObjectNode;
-//import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.primitives.Shorts;
 import com.google.common.primitives.SignedBytes;
@@ -25,9 +25,11 @@ import io.trino.spi.block.Block;
 import io.trino.spi.connector.ConnectorPageSink;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.VarcharType;
+import org.apache.pulsar.client.api.Producer;
+import org.apache.pulsar.client.api.PulsarClient;
+import org.apache.pulsar.client.api.PulsarClientException;
+import org.apache.pulsar.client.api.Schema;
 
-import java.sql.Timestamp;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -54,84 +56,93 @@ public class ExamplePageSink
 {
     private final List<String> columnNames;
     private final List<Type> columnTypes;
+    private final ObjectMapper objectMapper;
+    private final Producer<String> producer;
 
     public ExamplePageSink(
             String schemaName,
             String tableName,
             List<String> columnNames,
-            List<Type> columnTypes)
+            List<Type> columnTypes,
+            PulsarClient client) throws PulsarClientException
     {
         requireNonNull(schemaName, "schemaName is null");
         requireNonNull(tableName, "tableName is null");
         requireNonNull(columnNames, "columnNames is null");
         this.columnNames = ImmutableList.copyOf(requireNonNull(columnNames, "columnNames is null"));
         this.columnTypes = ImmutableList.copyOf(requireNonNull(columnTypes, "columnTypes is null"));
+        this.objectMapper = new ObjectMapper();
 
-        // TODO: Create Pulsar producer for this schema/topic
-        // see: https://pulsar.apache.org/docs/en/client-libraries-java/#producer
-//        Producer<String> stringProducer = client.newProducer(Schema.STRING)
-//                .topic("some-string-topic")
-//                .create();
+        // TODO: Pass schema/table name for topic
+        this.producer = client.newProducer(Schema.STRING)
+                .topic("test-topic")
+                .create();
     }
 
     @Override
     public CompletableFuture<?> appendPage(Page page)
     {
         for (int position = 0; position < page.getPositionCount(); position++) {
-            List<Object> values = new ArrayList<>(columnTypes.size());
+            ObjectNode node = this.objectMapper.createObjectNode();
 
             for (int channel = 0; channel < page.getChannelCount(); channel++) {
-                appendColumn(values, page, position, channel);
+                appendColumn(node, page, position, channel);
             }
 
-            // TODO: Use ObjectMapper to encode json string for printing out
-            // see: src/main/java/io/trino/plugin/kafka/encoder/json/JsonRowEncoder.java
-
-            System.out.println(values);
+            // Write out object as node
+            try {
+                String json = this.objectMapper.writer().writeValueAsString(node);
+                System.out.println(json);
+            }
+            catch (Exception ex) {
+                ex.printStackTrace();
+            }
         }
         return NOT_BLOCKED;
     }
 
-    private void appendColumn(List<Object> values, Page page, int position, int channel)
+    private void appendColumn(ObjectNode node, Page page, int position, int channel)
     {
         Block block = page.getBlock(channel);
+        String name = columnNames.get(channel);
         Type type = columnTypes.get(channel);
         if (block.isNull(position)) {
-            values.add(null);
+            node.set(name, node.nullNode());
         }
         else if (BOOLEAN.equals(type)) {
-            values.add(type.getBoolean(block, position));
+            node.put(name, type.getBoolean(block, position));
         }
         else if (BIGINT.equals(type)) {
-            values.add(type.getLong(block, position));
+            node.put(name, type.getLong(block, position));
         }
         else if (INTEGER.equals(type)) {
-            values.add(toIntExact(type.getLong(block, position)));
+            node.put(name, toIntExact(type.getLong(block, position)));
         }
         else if (SMALLINT.equals(type)) {
-            values.add(Shorts.checkedCast(type.getLong(block, position)));
+            node.put(name, Shorts.checkedCast(type.getLong(block, position)));
         }
         else if (TINYINT.equals(type)) {
-            values.add(SignedBytes.checkedCast(type.getLong(block, position)));
+            node.put(name, SignedBytes.checkedCast(type.getLong(block, position)));
         }
         else if (DOUBLE.equals(type)) {
-            values.add(type.getDouble(block, position));
+            node.put(name, type.getDouble(block, position));
         }
         else if (REAL.equals(type)) {
-            values.add(intBitsToFloat(toIntExact(type.getLong(block, position))));
+            node.put(name, intBitsToFloat(toIntExact(type.getLong(block, position))));
         }
         else if (DATE.equals(type)) {
             // TODO: support date as long?
-            values.add(type.getLong(block, position));
+            node.put(name, type.getLong(block, position));
         }
         else if (TIMESTAMP_TZ_MILLIS.equals(type)) {
-            values.add(new Timestamp(unpackMillisUtc(type.getLong(block, position))));
+            // TODO: store timestamp as long?
+            node.put(name, unpackMillisUtc(type.getLong(block, position)));
         }
         else if (type instanceof VarcharType) {
-            values.add(type.getSlice(block, position).toStringUtf8());
+            node.put(name, type.getSlice(block, position).toStringUtf8());
         }
         else if (VARBINARY.equals(type)) {
-            values.add(type.getSlice(block, position).toByteBuffer());
+            node.put(name, type.getSlice(block, position).toByteBuffer().array());
         }
         else {
             throw new TrinoException(NOT_SUPPORTED, "Unsupported column type: " + type.getDisplayName());
