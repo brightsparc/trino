@@ -15,6 +15,8 @@ package io.trino.plugin.example;
 
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorHandleResolver;
+import io.trino.spi.connector.ConnectorInsertTableHandle;
+import io.trino.spi.connector.ConnectorOutputTableHandle;
 import io.trino.spi.connector.ConnectorSplit;
 import io.trino.spi.connector.ConnectorTableHandle;
 import io.trino.spi.connector.ConnectorTransactionHandle;
@@ -38,6 +40,18 @@ public class ExampleHandleResolver
     public Class<? extends ConnectorSplit> getSplitClass()
     {
         return ExampleSplit.class;
+    }
+
+    @Override
+    public Class<? extends ConnectorInsertTableHandle> getInsertTableHandleClass()
+    {
+        return ExampleInsertTableHandle.class;
+    }
+
+    @Override
+    public Class<? extends ConnectorOutputTableHandle> getOutputTableHandleClass()
+    {
+        return ExampleOutputTableHandle.class;
     }
 
     @Override

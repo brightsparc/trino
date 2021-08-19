@@ -32,6 +32,7 @@ public class ExampleModule
         binder.bind(ExampleClient.class).in(Scopes.SINGLETON);
         binder.bind(ExampleSplitManager.class).in(Scopes.SINGLETON);
         binder.bind(ExampleRecordSetProvider.class).in(Scopes.SINGLETON);
+        binder.bind(ExamplePageSinkProvider.class).in(Scopes.SINGLETON);
         configBinder(binder).bindConfig(ExampleConfig.class);
 
         jsonCodecBinder(binder).bindMapJsonCodec(String.class, listJsonCodec(ExampleTable.class));

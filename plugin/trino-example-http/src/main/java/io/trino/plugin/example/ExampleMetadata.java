@@ -16,9 +16,12 @@ package io.trino.plugin.example;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import io.airlift.slice.Slice;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ColumnMetadata;
+import io.trino.spi.connector.ConnectorInsertTableHandle;
 import io.trino.spi.connector.ConnectorMetadata;
+import io.trino.spi.connector.ConnectorOutputMetadata;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.ConnectorTableHandle;
 import io.trino.spi.connector.ConnectorTableMetadata;
@@ -26,14 +29,18 @@ import io.trino.spi.connector.ConnectorTableProperties;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.SchemaTablePrefix;
 import io.trino.spi.connector.TableNotFoundException;
+import io.trino.spi.statistics.ComputedStatistics;
+import io.trino.spi.type.Type;
 
 import javax.inject.Inject;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static java.util.Objects.requireNonNull;
 
 public class ExampleMetadata
@@ -166,5 +173,29 @@ public class ExampleMetadata
     public ConnectorTableProperties getTableProperties(ConnectorSession session, ConnectorTableHandle table)
     {
         return new ConnectorTableProperties();
+    }
+
+    @Override
+    public synchronized ConnectorInsertTableHandle beginInsert(ConnectorSession session, ConnectorTableHandle tableHandle, List<ColumnHandle> columns)
+    {
+        ExampleTableHandle table = (ExampleTableHandle) tableHandle;
+
+        List<String> columnNames = columns.stream()
+                .map(ExampleColumnHandle.class::cast)
+                .map(c -> c.getColumnName())
+                .collect(toImmutableList());
+
+        List<Type> columnTypes = columns.stream()
+                .map(ExampleColumnHandle.class::cast)
+                .map(c -> c.getColumnType())
+                .collect(toImmutableList());
+
+        return new ExampleInsertTableHandle(table.getSchemaName(), table.getTableName(), columnNames, columnTypes);
+    }
+
+    @Override
+    public synchronized Optional<ConnectorOutputMetadata> finishInsert(ConnectorSession session, ConnectorInsertTableHandle insertHandle, Collection<Slice> fragments, Collection<ComputedStatistics> computedStatistics)
+    {
+        return Optional.empty();
     }
 }
