@@ -13,6 +13,7 @@
  */
 package io.trino.plugin.example;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableList;
@@ -26,10 +27,8 @@ import io.trino.spi.connector.ConnectorPageSink;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.VarcharType;
 import org.apache.pulsar.client.api.Producer;
-import org.apache.pulsar.client.api.PulsarClient;
-import org.apache.pulsar.client.api.PulsarClientException;
-import org.apache.pulsar.client.api.Schema;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -49,56 +48,52 @@ import static io.trino.spi.type.VarbinaryType.VARBINARY;
 import static java.lang.Float.intBitsToFloat;
 import static java.lang.Math.toIntExact;
 import static java.util.Objects.requireNonNull;
-import static java.util.concurrent.CompletableFuture.completedFuture;
 
 public class ExamplePageSink
         implements ConnectorPageSink
 {
+    private final Producer<String> producer;
     private final List<String> columnNames;
     private final List<Type> columnTypes;
     private final ObjectMapper objectMapper;
-    private final Producer<String> producer;
 
     public ExamplePageSink(
-            String schemaName,
-            String tableName,
+            Producer<String> producer,
             List<String> columnNames,
-            List<Type> columnTypes,
-            PulsarClient client) throws PulsarClientException
+            List<Type> columnTypes)
     {
-        requireNonNull(schemaName, "schemaName is null");
-        requireNonNull(tableName, "tableName is null");
-        requireNonNull(columnNames, "columnNames is null");
+        this.producer = requireNonNull(producer, "producer is null");
         this.columnNames = ImmutableList.copyOf(requireNonNull(columnNames, "columnNames is null"));
         this.columnTypes = ImmutableList.copyOf(requireNonNull(columnTypes, "columnTypes is null"));
         this.objectMapper = new ObjectMapper();
-
-        // TODO: Pass schema/table name for topic
-        this.producer = client.newProducer(Schema.STRING)
-                .topic("test-topic")
-                .create();
     }
 
     @Override
     public CompletableFuture<?> appendPage(Page page)
     {
+        List<CompletableFuture<?>> messages = new ArrayList<>();
+
         for (int position = 0; position < page.getPositionCount(); position++) {
+            // Declare json node output
             ObjectNode node = this.objectMapper.createObjectNode();
 
             for (int channel = 0; channel < page.getChannelCount(); channel++) {
                 appendColumn(node, page, position, channel);
             }
 
-            // Write out object as node
             try {
+                // Convert to JSON
                 String json = this.objectMapper.writer().writeValueAsString(node);
-                System.out.println(json);
+                // Add to messages
+                messages.add(this.producer.sendAsync(json));
             }
-            catch (Exception ex) {
+            catch (JsonProcessingException ex) {
                 ex.printStackTrace();
             }
         }
-        return NOT_BLOCKED;
+
+        // Return a future for all messages
+        return CompletableFuture.allOf(messages.toArray(new CompletableFuture[messages.size()]));
     }
 
     private void appendColumn(ObjectNode node, Page page, int position, int channel)
@@ -152,10 +147,8 @@ public class ExamplePageSink
     @Override
     public CompletableFuture<Collection<Slice>> finish()
     {
-        // TODO: Flush the publisher
-
-        // the committer does not need any additional info
-        return completedFuture(ImmutableList.of());
+        // Flush and then return empty immutable list
+        return this.producer.flushAsync().thenApply(v -> ImmutableList.of());
     }
 
     @Override

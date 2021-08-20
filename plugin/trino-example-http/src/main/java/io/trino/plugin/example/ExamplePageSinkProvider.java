@@ -19,10 +19,15 @@ import io.trino.spi.connector.ConnectorPageSink;
 import io.trino.spi.connector.ConnectorPageSinkProvider;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.ConnectorTransactionHandle;
+import io.trino.spi.type.Type;
+import org.apache.pulsar.client.api.Producer;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.PulsarClientException;
+import org.apache.pulsar.client.api.Schema;
 
 import javax.inject.Inject;
+
+import java.util.List;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
@@ -33,11 +38,10 @@ public class ExamplePageSinkProvider
     private final PulsarClient pulsarClient;
 
     @Inject
-    public ExamplePageSinkProvider() throws PulsarClientException
+    public ExamplePageSinkProvider(ExampleConfig exampleConfig) throws PulsarClientException
     {
-        // TODO: Pass configuration
         pulsarClient = PulsarClient.builder()
-                .serviceUrl("pulsar://localhost:6650")
+                .serviceUrl(exampleConfig.getPulsar().toString())
                 .build();
     }
 
@@ -48,18 +52,7 @@ public class ExamplePageSinkProvider
         checkArgument(tableHandle instanceof ExampleOutputTableHandle, "tableHandle is not an instance of CassandraOutputTableHandle");
         ExampleOutputTableHandle handle = (ExampleOutputTableHandle) tableHandle;
 
-        try {
-            return new ExamplePageSink(
-                    handle.getSchemaName(),
-                    handle.getTableName(),
-                    handle.getColumnNames(),
-                    handle.getColumnTypes(),
-                    pulsarClient);
-        }
-        catch (Exception ex) {
-            ex.printStackTrace();
-            return null;
-        }
+        return getPageSink("public", handle.getSchemaName(), handle.getTableName(), handle.getColumnNames(), handle.getColumnTypes());
     }
 
     @Override
@@ -69,15 +62,24 @@ public class ExamplePageSinkProvider
         checkArgument(tableHandle instanceof ExampleInsertTableHandle, "tableHandle is not an instance of ConnectorInsertTableHandle");
         ExampleInsertTableHandle handle = (ExampleInsertTableHandle) tableHandle;
 
+        return getPageSink("public", handle.getSchemaName(), handle.getTableName(), handle.getColumnNames(), handle.getColumnTypes());
+    }
+
+    private ConnectorPageSink getPageSink(String tenant, String schemaName, String tableName, List<String> columnNames, List<Type> columnTypes)
+    {
         try {
+            // Create a produce for this tenant, schema and table
+            String topic = String.format("persistent://%s/%s/%s", tenant, schemaName, tableName);
+            Producer producer = pulsarClient.newProducer(Schema.STRING)
+                    .topic(topic)
+                    .create();
+            // Return the new page sink
             return new ExamplePageSink(
-                    handle.getSchemaName(),
-                    handle.getTableName(),
-                    handle.getColumnNames(),
-                    handle.getColumnTypes(),
-                    pulsarClient);
+                    producer,
+                    columnNames,
+                    columnTypes);
         }
-        catch (Exception ex) {
+        catch (PulsarClientException ex) {
             ex.printStackTrace();
             return null;
         }

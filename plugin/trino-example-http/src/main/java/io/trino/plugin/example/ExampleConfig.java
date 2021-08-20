@@ -22,6 +22,7 @@ import java.net.URI;
 public class ExampleConfig
 {
     private URI metadata;
+    private URI pulsar;
 
     @NotNull
     public URI getMetadata()
@@ -33,6 +34,19 @@ public class ExampleConfig
     public ExampleConfig setMetadata(URI metadata)
     {
         this.metadata = metadata;
+        return this;
+    }
+
+    @NotNull
+    public URI getPulsar()
+    {
+        return pulsar;
+    }
+
+    @Config("pulsar-uri")
+    public ExampleConfig setPulsar(URI pulsar)
+    {
+        this.pulsar = pulsar;
         return this;
     }
 }
