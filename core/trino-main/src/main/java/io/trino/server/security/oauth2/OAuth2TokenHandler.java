@@ -11,29 +11,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.trino.parquet.predicate;
+package io.trino.server.security.oauth2;
 
-public class ParquetIntegerStatistics
-        implements ParquetRangeStatistics<Long>
+public interface OAuth2TokenHandler
 {
-    private final Long minimum;
-    private final Long maximum;
+    void setAccessToken(String hashedState, String accessToken);
 
-    public ParquetIntegerStatistics(Long minimum, Long maximum)
-    {
-        this.minimum = minimum;
-        this.maximum = maximum;
-    }
-
-    @Override
-    public Long getMin()
-    {
-        return minimum;
-    }
-
-    @Override
-    public Long getMax()
-    {
-        return maximum;
-    }
+    void setTokenExchangeError(String hashedState, String errorMessage);
 }

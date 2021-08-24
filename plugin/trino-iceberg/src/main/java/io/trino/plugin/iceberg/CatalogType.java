@@ -11,18 +11,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.trino.plugin.jdbc;
+package io.trino.plugin.iceberg;
 
-import com.google.inject.Binder;
-import com.google.inject.Module;
-import com.google.inject.Scopes;
-
-public class ExtraCredentialsBasedJdbcIdentityCacheMappingModule
-        implements Module
+public enum CatalogType
 {
-    @Override
-    public void configure(Binder binder)
-    {
-        binder.bind(IdentityCacheMapping.class).to(ExtraCredentialsBasedIdentityCacheMapping.class).in(Scopes.SINGLETON);
-    }
+    HIVE,
+    // TODO: dummy type to pass IcebergConfig test, remove it after adding actual catalog types
+    UNKNOWN,
+
+    /**/;
 }

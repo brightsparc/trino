@@ -11,31 +11,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.trino.parquet.predicate;
+package io.trino.connector;
 
-import io.airlift.slice.Slice;
+import io.trino.spi.connector.ConnectorPageSource;
+import org.testng.annotations.Test;
 
-public class ParquetStringStatistics
-        implements ParquetRangeStatistics<Slice>
+import static io.trino.spi.testing.InterfaceTestUtils.assertAllMethodsOverridden;
+
+public class TestMockConnectorPageSource
 {
-    private final Slice minimum;
-    private final Slice maximum;
-
-    public ParquetStringStatistics(Slice minimum, Slice maximum)
+    @Test
+    public void testEverythingImplemented()
     {
-        this.minimum = minimum;
-        this.maximum = maximum;
-    }
-
-    @Override
-    public Slice getMin()
-    {
-        return minimum;
-    }
-
-    @Override
-    public Slice getMax()
-    {
-        return maximum;
+        assertAllMethodsOverridden(ConnectorPageSource.class, MockConnectorPageSource.class);
     }
 }

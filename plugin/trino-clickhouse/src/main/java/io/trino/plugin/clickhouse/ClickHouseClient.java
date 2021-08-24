@@ -15,7 +15,8 @@ package io.trino.plugin.clickhouse;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import io.airlift.slice.Slice;
+import io.trino.plugin.base.expression.AggregateFunctionRewriter;
+import io.trino.plugin.base.expression.AggregateFunctionRule;
 import io.trino.plugin.jdbc.BaseJdbcClient;
 import io.trino.plugin.jdbc.BaseJdbcConfig;
 import io.trino.plugin.jdbc.ColumnMapping;
@@ -27,8 +28,6 @@ import io.trino.plugin.jdbc.JdbcTypeHandle;
 import io.trino.plugin.jdbc.RemoteTableName;
 import io.trino.plugin.jdbc.SliceWriteFunction;
 import io.trino.plugin.jdbc.WriteMapping;
-import io.trino.plugin.jdbc.expression.AggregateFunctionRewriter;
-import io.trino.plugin.jdbc.expression.AggregateFunctionRule;
 import io.trino.plugin.jdbc.expression.ImplementAvgFloatingPoint;
 import io.trino.plugin.jdbc.expression.ImplementCount;
 import io.trino.plugin.jdbc.expression.ImplementCountAll;
@@ -68,8 +67,6 @@ import java.util.UUID;
 import java.util.function.BiFunction;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
-import static io.airlift.slice.SizeOf.SIZE_OF_LONG;
-import static io.airlift.slice.Slices.wrappedLongArray;
 import static io.trino.plugin.jdbc.DecimalConfig.DecimalMapping.ALLOW_OVERFLOW;
 import static io.trino.plugin.jdbc.DecimalSessionSessionProperties.getDecimalDefaultScale;
 import static io.trino.plugin.jdbc.DecimalSessionSessionProperties.getDecimalRounding;
@@ -111,8 +108,9 @@ import static io.trino.spi.type.RealType.REAL;
 import static io.trino.spi.type.SmallintType.SMALLINT;
 import static io.trino.spi.type.TimestampType.TIMESTAMP_MILLIS;
 import static io.trino.spi.type.TinyintType.TINYINT;
+import static io.trino.spi.type.UuidType.javaUuidToTrinoUuid;
+import static io.trino.spi.type.UuidType.trinoUuidToJavaUuid;
 import static io.trino.spi.type.VarcharType.createUnboundedVarcharType;
-import static java.lang.Long.reverseBytes;
 import static java.lang.Math.max;
 import static java.lang.String.format;
 import static java.lang.String.join;
@@ -123,7 +121,7 @@ public class ClickHouseClient
     static final int CLICKHOUSE_MAX_DECIMAL_PRECISION = 76;
 
     private final boolean mapStringAsVarchar;
-    private final AggregateFunctionRewriter aggregateFunctionRewriter;
+    private final AggregateFunctionRewriter<JdbcExpression> aggregateFunctionRewriter;
     private final Type uuidType;
 
     @Inject
@@ -139,9 +137,9 @@ public class ClickHouseClient
         // TODO (https://github.com/trinodb/trino/issues/7102) define session property
         this.mapStringAsVarchar = clickHouseConfig.isMapStringAsVarchar();
         JdbcTypeHandle bigintTypeHandle = new JdbcTypeHandle(Types.BIGINT, Optional.of("bigint"), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
-        this.aggregateFunctionRewriter = new AggregateFunctionRewriter(
+        this.aggregateFunctionRewriter = new AggregateFunctionRewriter<>(
                 this::quoted,
-                ImmutableSet.<AggregateFunctionRule>builder()
+                ImmutableSet.<AggregateFunctionRule<JdbcExpression>>builder()
                         .add(new ImplementCountAll(bigintTypeHandle))
                         .add(new ImplementCount(bigintTypeHandle))
                         .add(new ImplementMinMax(false)) // TODO: Revisit once https://github.com/trinodb/trino/issues/7100 is resolved
@@ -491,25 +489,12 @@ public class ClickHouseClient
     {
         return ColumnMapping.sliceMapping(
                 uuidType,
-                (resultSet, columnIndex) -> uuidSlice((UUID) resultSet.getObject(columnIndex)),
+                (resultSet, columnIndex) -> javaUuidToTrinoUuid((UUID) resultSet.getObject(columnIndex)),
                 uuidWriteFunction());
     }
 
-    // see io.trino.type.UuidType#getObjectValue
     private static SliceWriteFunction uuidWriteFunction()
     {
-        return (statement, index, value) -> {
-            long high = reverseBytes(value.getLong(0));
-            long low = reverseBytes(value.getLong(SIZE_OF_LONG));
-            UUID uuid = new UUID(high, low);
-            statement.setObject(index, uuid, Types.OTHER);
-        };
-    }
-
-    private static Slice uuidSlice(UUID uuid)
-    {
-        return wrappedLongArray(
-                reverseBytes(uuid.getMostSignificantBits()),
-                reverseBytes(uuid.getLeastSignificantBits()));
+        return (statement, index, value) -> statement.setObject(index, trinoUuidToJavaUuid(value), Types.OTHER);
     }
 }
