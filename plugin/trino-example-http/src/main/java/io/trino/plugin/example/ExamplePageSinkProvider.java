@@ -23,7 +23,6 @@ import io.trino.spi.type.Type;
 import org.apache.pulsar.client.api.Producer;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.PulsarClientException;
-import org.apache.pulsar.client.api.Schema;
 
 import javax.inject.Inject;
 
@@ -70,7 +69,9 @@ public class ExamplePageSinkProvider
         try {
             // Create a produce for this tenant, schema and table
             String topic = String.format("persistent://%s/%s/%s", tenant, schemaName, tableName);
-            Producer producer = pulsarClient.newProducer(Schema.STRING)
+            // Create a producer, and writeValueAsBytes() when sending
+            // see: https://github.com/apache/pulsar/blob/master/site2/docs/schema-get-started.md
+            Producer producer = pulsarClient.newProducer()
                     .topic(topic)
                     .create();
             // Return the new page sink

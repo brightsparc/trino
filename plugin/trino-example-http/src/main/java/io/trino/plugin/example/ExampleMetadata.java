@@ -196,6 +196,6 @@ public class ExampleMetadata
     @Override
     public synchronized Optional<ConnectorOutputMetadata> finishInsert(ConnectorSession session, ConnectorInsertTableHandle insertHandle, Collection<Slice> fragments, Collection<ComputedStatistics> computedStatistics)
     {
-        return Optional.empty();
+         return Optional.empty();
     }
 }

@@ -52,13 +52,13 @@ import static java.util.Objects.requireNonNull;
 public class ExamplePageSink
         implements ConnectorPageSink
 {
-    private final Producer<String> producer;
+    private final Producer<byte[]> producer;
     private final List<String> columnNames;
     private final List<Type> columnTypes;
     private final ObjectMapper objectMapper;
 
     public ExamplePageSink(
-            Producer<String> producer,
+            Producer<byte[]> producer,
             List<String> columnNames,
             List<Type> columnTypes)
     {
@@ -82,10 +82,10 @@ public class ExamplePageSink
             }
 
             try {
-                // Convert to JSON
-                String json = this.objectMapper.writer().writeValueAsString(node);
+                // Convert to JSON as bytes
+                byte[] jsonAsBytes = this.objectMapper.writer().writeValueAsBytes(node);
                 // Add to messages
-                messages.add(this.producer.sendAsync(json));
+                messages.add(this.producer.sendAsync(jsonAsBytes));
             }
             catch (JsonProcessingException ex) {
                 ex.printStackTrace();
