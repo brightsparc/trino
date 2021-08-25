@@ -30,6 +30,7 @@ public final class ExampleTableHandle
 
     @JsonCreator
     public ExampleTableHandle(
+            // TODO: Add tenant, and other table properties
             @JsonProperty("schemaName") String schemaName,
             @JsonProperty("tableName") String tableName)
     {

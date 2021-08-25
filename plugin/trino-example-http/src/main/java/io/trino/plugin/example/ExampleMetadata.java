@@ -21,14 +21,18 @@ import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.connector.ConnectorInsertTableHandle;
 import io.trino.spi.connector.ConnectorMetadata;
+import io.trino.spi.connector.ConnectorNewTableLayout;
 import io.trino.spi.connector.ConnectorOutputMetadata;
+import io.trino.spi.connector.ConnectorOutputTableHandle;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.ConnectorTableHandle;
 import io.trino.spi.connector.ConnectorTableMetadata;
 import io.trino.spi.connector.ConnectorTableProperties;
+import io.trino.spi.connector.LocalProperty;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.SchemaTablePrefix;
 import io.trino.spi.connector.TableNotFoundException;
+import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.statistics.ComputedStatistics;
 import io.trino.spi.type.Type;
 
@@ -146,7 +150,10 @@ public class ExampleMetadata
             return null;
         }
 
-        return new ConnectorTableMetadata(tableName, table.getColumnsMetadata());
+        // Hard code the properties to include format to be JSON
+        Map<String, Object> properties = Map.of("format", "JSON");
+
+        return new ConnectorTableMetadata(tableName, table.getColumnsMetadata(), properties);
     }
 
     private List<SchemaTableName> listTables(ConnectorSession session, SchemaTablePrefix prefix)
@@ -172,7 +179,60 @@ public class ExampleMetadata
     @Override
     public ConnectorTableProperties getTableProperties(ConnectorSession session, ConnectorTableHandle table)
     {
-        return new ConnectorTableProperties();
+        ExampleTableHandle exampleTable = (ExampleTableHandle) table;
+
+        // TODO: Get properties from table
+        TupleDomain<ColumnHandle> predicate = TupleDomain.none();
+        List<LocalProperty<ColumnHandle>> localProperties = ImmutableList.of();
+
+        return new ConnectorTableProperties(
+                predicate,
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                localProperties);
+    }
+
+    @Override
+    public ConnectorOutputTableHandle beginCreateTable(ConnectorSession session, ConnectorTableMetadata tableMetadata, Optional<ConnectorNewTableLayout> layout)
+    {
+        return createTable(tableMetadata);
+    }
+
+    @Override
+    public void createTable(ConnectorSession session, ConnectorTableMetadata tableMetadata, boolean ignoreExisting)
+    {
+        createTable(tableMetadata);
+    }
+
+    private ExampleOutputTableHandle createTable(ConnectorTableMetadata tableMetadata)
+    {
+        ImmutableList.Builder<String> columnNames = ImmutableList.builder();
+        ImmutableList.Builder<Type> columnTypes = ImmutableList.builder();
+        for (ColumnMetadata column : tableMetadata.getColumns()) {
+            columnNames.add(column.getName());
+            columnTypes.add(column.getType());
+        }
+
+        SchemaTableName table = tableMetadata.getTable();
+        String schemaName = table.getSchemaName();
+        String tableName = table.getTableName();
+        List<String> columns = columnNames.build();
+        List<Type> types = columnTypes.build();
+
+        // TODO: Call into pulsar to create namespace & schema
+
+        return new ExampleOutputTableHandle(
+                schemaName,
+                tableName,
+                columns,
+                types);
+    }
+
+    @Override
+    public Optional<ConnectorOutputMetadata> finishCreateTable(ConnectorSession session, ConnectorOutputTableHandle tableHandle, Collection<Slice> fragments, Collection<ComputedStatistics> computedStatistics)
+    {
+        return Optional.empty();
     }
 
     @Override
